@@ -48,13 +48,38 @@ Output:
 python -m unittest discover -s tests -v
 ```
 
-20 tests cover Observation parsing, Claim generation, Validation rules, Recognition gate, end-to-end, and the CLI stdin/stdout contract. Stdlib only, no external deps.
+20 tests cover Observation parsing, Claim generation, Validation rules, Recognition gate, end-to-end, and the CLI stdin/stdout contract. 10 tests cover the derived Ledger layer. Stdlib only, no external deps.
 
-## Current state (v0.1.1)
+## Derived layer
 
-- `src/pipeline.py` — single-file pipeline.
-- `tests/test_pipeline.py` — 20 tests, all green.
-- No persistence, no derived layer yet.
+Ledger is a *derived* view over Recognitions (not a primitive). It aggregates Recognition events into per-subject, per-currency balances and per-currency totals.
+
+```bash
+cat events.jsonl | python pipeline.py | python ledger.py
+```
+
+Output:
+```json
+{
+  "accounts": [
+    {"subject": "identity:Bank1", "currency": "USD",
+     "balance": "750", "recognized_count": 3, "rejected_count": 0},
+    ...
+  ],
+  "totals_by_currency": {"USD": "750", "EUR": "500"},
+  "recognized_total": 4, "rejected_total": 2
+}
+```
+
+Decimal arithmetic is used throughout — no float drift on fractional amounts.
+
+## Current state (v0.1.2)
+
+- `src/pipeline.py` — Observation → Claim → Validation → Recognition.
+- `src/ledger.py` — derived aggregation (Account, totals, counts).
+- `tests/test_pipeline.py` — 20 tests.
+- `tests/test_ledger.py` — 10 tests.
+- 30/30 tests pass. No persistence yet.
 
 ## Frozen ontology
 
