@@ -42,6 +42,20 @@ Output:
 {"observation": {...}, "claim": {...}, "validation": {"status": "pass", "confidence": 0.9, ...}, "recognition": {"status": "recognized", ...}}
 ```
 
+## Tests
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+20 tests cover Observation parsing, Claim generation, Validation rules, Recognition gate, end-to-end, and the CLI stdin/stdout contract. Stdlib only, no external deps.
+
+## Current state (v0.1.1)
+
+- `src/pipeline.py` — single-file pipeline.
+- `tests/test_pipeline.py` — 20 tests, all green.
+- No persistence, no derived layer yet.
+
 ## Frozen ontology
 
 This implementation uses the 6 primitives from the frozen Zhamlik ontology:
