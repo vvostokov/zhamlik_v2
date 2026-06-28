@@ -2,6 +2,16 @@
 
 Append-only. Each entry: iteration, what, why, alternatives rejected.
 
+## 003 — 2026-06-28 — Pluggable validation rule registry
+
+**What:** Refactored `validate_claim` in `pipeline.py` from a hardcoded if-chain to a registry. New API: `pipeline.register_rule(callable)`. Rule = `Claim -> str | None`. 4 new tests in `tests/test_pipeline.py`. All 34 tests pass. No external behavior change.
+
+**Why:** Adding a real financial rule (max amount, blacklist, sanctions check, FX rate sanity, etc.) previously required editing `validate_claim` directly. Registry makes rules first-class extensions: add/remove without touching the pipeline control flow.
+
+**Contract preserved:** Default behavior unchanged (same three default rules, same outputs for same inputs). Verified by all 20 existing pipeline tests passing unmodified.
+
+**Rejected:** Decorator pattern (`@pipeline.rule`) — implicit; harder to debug. JSON rule config — over-engineering for MVP. Per-source rule scoping — added complexity without observed need.
+
 ## 002 — 2026-06-28 — Derived Ledger layer
 
 **What:** `src/ledger.py` — derived aggregation over Recognition events. Per-subject × per-currency account balances, totals, counts. 10 tests in `tests/test_ledger.py`. No changes to `pipeline.py`.

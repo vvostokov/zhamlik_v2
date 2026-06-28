@@ -73,13 +73,29 @@ Output:
 
 Decimal arithmetic is used throughout — no float drift on fractional amounts.
 
-## Current state (v0.1.2)
+## Current state (v0.1.3)
 
-- `src/pipeline.py` — Observation → Claim → Validation → Recognition.
+- `src/pipeline.py` — Observation → Claim → Validation → Recognition. Validation uses a pluggable rule registry (`pipeline.register_rule(callable)`).
 - `src/ledger.py` — derived aggregation (Account, totals, counts).
-- `tests/test_pipeline.py` — 20 tests.
+- `tests/test_pipeline.py` — 24 tests (incl. rule registry).
 - `tests/test_ledger.py` — 10 tests.
-- 30/30 tests pass. No persistence yet.
+- 34/34 tests pass.
+
+### Adding a validation rule
+
+```python
+import pipeline
+from decimal import Decimal
+
+def reject_over_1m_usd(claim):
+    if claim.observation.currency == "USD" and claim.observation.amount > Decimal("1000000"):
+        return "amount_exceeds_1M_USD"
+    return None
+
+pipeline.register_rule(reject_over_1m_usd)
+```
+
+Rules take a `Claim` and return `None` (pass) or a failure-tag string. All registered rules run; all failures are reported in `validation.method`.
 
 ## Frozen ontology
 

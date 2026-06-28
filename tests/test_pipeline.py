@@ -157,6 +157,64 @@ class EndToEnd(unittest.TestCase):
 
 
 # -----------------------------------------------------------------------------
+# Validation rule registry (pluggable rules)
+# -----------------------------------------------------------------------------
+
+from decimal import Decimal  # noqa: E402
+
+class RuleRegistry(unittest.TestCase):
+    """Adding a rule must work without editing validate_claim()."""
+
+    def setUp(self):
+        # Snapshot the default rules so test mutations don't leak.
+        self._snapshot = list(pipeline._DEFAULT_RULES)
+
+    def tearDown(self):
+        pipeline._DEFAULT_RULES.clear()
+        pipeline._DEFAULT_RULES.extend(self._snapshot)
+
+    def test_register_appends_rule(self):
+        before = len(pipeline._DEFAULT_RULES)
+        def always_pass(_claim): return None
+        pipeline.register_rule(always_pass)
+        self.assertEqual(len(pipeline._DEFAULT_RULES), before + 1)
+
+    def test_new_rule_takes_effect_on_next_validate(self):
+        def reject_all(_claim): return "rejected_by_test"
+        pipeline.register_rule(reject_all)
+        v = pipeline.validate_claim(pipeline.generate_claim(make_obs()))
+        self.assertEqual(v.status, "fail")
+        self.assertIn("rejected_by_test", v.method)
+
+    def test_real_financial_rule_max_amount(self):
+        """Real-world example: reject transactions above 1M USD."""
+        MAX_USD = Decimal("1000000")
+        def max_amount_usd(claim):
+            if (claim.observation.currency == "USD"
+                    and claim.observation.amount > MAX_USD):
+                return "amount_exceeds_1M_USD"
+            return None
+        pipeline.register_rule(max_amount_usd)
+        ok = pipeline.validate_claim(
+            pipeline.generate_claim(make_obs(amount="999999", currency="USD")))
+        self.assertEqual(ok.status, "pass")
+        too_big = pipeline.validate_claim(
+            pipeline.generate_claim(make_obs(amount="1000001", currency="USD")))
+        self.assertEqual(too_big.status, "fail")
+        self.assertIn("amount_exceeds_1M_USD", too_big.method)
+
+    def test_multiple_registered_rules_combine_failures(self):
+        def r1(_c): return "rule1"
+        def r2(_c): return "rule2"
+        pipeline.register_rule(r1)
+        pipeline.register_rule(r2)
+        v = pipeline.validate_claim(pipeline.generate_claim(make_obs()))
+        self.assertEqual(v.status, "fail")
+        self.assertIn("rule1", v.method)
+        self.assertIn("rule2", v.method)
+
+
+# -----------------------------------------------------------------------------
 # CLI contract (subprocess, line-based JSON)
 # -----------------------------------------------------------------------------
 

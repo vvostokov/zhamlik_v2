@@ -82,6 +82,52 @@ class Validation:
         return f"Validation({self.status}, conf={self.confidence:.2f})"
 
 
+# -----------------------------------------------------------------------------
+# Validation rule registry
+# -----------------------------------------------------------------------------
+# A rule is a callable: Claim -> None | str. Returning None means "passed";
+# returning a string is the failure tag. Rules are independent and order-
+# independent; all are evaluated, all failures are reported.
+
+from typing import Callable, List
+
+Rule = Callable[[Claim], "str | None"]
+
+_DEFAULT_RULES: List[Rule] = []
+
+
+def register_rule(rule: Rule) -> None:
+    """Register a validation rule. Append-only."""
+    _DEFAULT_RULES.append(rule)
+
+
+def _rule_amount_positive(claim: Claim) -> str | None:
+    return "amount_zero" if claim.observation.amount == 0 else None
+
+
+def _rule_currency_format(claim: Claim) -> str | None:
+    c = claim.observation.currency
+    return "invalid_currency" if len(c) != 3 or not c.isalpha() else None
+
+
+def _rule_source_known(claim: Claim) -> str | None:
+    return "unknown_source" if claim.observation.source not in KNOWN_SOURCES else None
+
+
+# Register defaults at import time.
+register_rule(_rule_amount_positive)
+register_rule(_rule_currency_format)
+register_rule(_rule_source_known)
+
+
+def _evaluate_rules(claim: Claim, rules: List[Rule]) -> tuple[str, float, str]:
+    """Run all rules, return (status, confidence, method)."""
+    failures = [tag for r in rules if (tag := r(claim)) is not None]
+    if failures:
+        return "fail", 0.0, "fail:" + "+".join(failures)
+    return "pass", claim.confidence, "+".join(r.__name__.lstrip("_rule_") for r in rules)
+
+
 @dataclass
 class Recognition:
     """The decision to admit a validated Claim into the recognized state."""
@@ -134,35 +180,12 @@ def generate_claim(obs: Observation) -> Claim:
 def validate_claim(claim: Claim) -> Validation:
     """Step 3: Claim -> Validation.
 
-    Rules (MVP):
-      - amount must be positive (non-zero)
-      - currency must be a 3-letter code
-      - source must be in KNOWN_SOURCES
+    Evaluates every registered rule against the claim. All rules are run;
+    all failures are reported together. Adding a rule does not require
+    editing this function — use register_rule().
     """
-    obs = claim.observation
-    failures = []
-
-    if obs.amount == 0:
-        failures.append("amount_zero")
-    if len(obs.currency) != 3 or not obs.currency.isalpha():
-        failures.append("invalid_currency")
-    if obs.source not in KNOWN_SOURCES:
-        failures.append("unknown_source")
-
-    if failures:
-        return Validation(
-            claim=claim,
-            status="fail",
-            confidence=0.0,
-            method=f"fail:{'+'.join(failures)}",
-        )
-
-    # Pass: propagate claim confidence (no penalty for MVP).
-    return Validation(
-        claim=claim,
-        status="pass",
-        confidence=claim.confidence,
-    )
+    status, confidence, method = _evaluate_rules(claim, _DEFAULT_RULES)
+    return Validation(claim=claim, status=status, confidence=confidence, method=method)
 
 
 def recognize(validation: Validation) -> Recognition:
